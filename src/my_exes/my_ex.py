@@ -2,7 +2,7 @@ from typing import Any
 from pathlib import Path
 from datetime import datetime as dt
 
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 from tensorboardX import SummaryWriter
 from torch import Tensor
 from torch.nn import Module
@@ -20,11 +20,15 @@ class MyEx:
 
         timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
         if "log_dir" not in self.cfg:
-            self.cfg["log_dir"] = self.cfg.name + timestamp  # type: ignore
+            self.log_dir = self.cfg.name + "_" + timestamp
         else:
-            self.log_dir = self.cfg["log_dir"] + timestamp  # type: ignore
+            self.log_dir = self.cfg["log_dir"] + "_" + timestamp  # type: ignore
         self.log_dir = Path(self.log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+
+        # save the config file in log dir
+        if self.config_file.parent != self.log_dir:
+            OmegaConf.save(self.cfg, self.log_dir / "config.yaml")
 
         self.loggers = self.cfg.get("loggers", ["tensorboard"])  # type: ignore
         self.tb_logger = SummaryWriter(logdir=str(self.log_dir))

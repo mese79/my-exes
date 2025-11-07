@@ -1,5 +1,5 @@
 name: experiment_1
-log_dir: "my_log"
+# log_dir: "my_log"
 loggers:
   - csv
   - tensorboard
