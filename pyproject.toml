@@ -1,7 +1,7 @@
 [project]
 name = "my-exes"
 version = "0.1.0"
-description = "Add your description here"
+description = "A simple package to log your DL experiments"
 readme = "README.md"
 authors = [
     { name = "Mehdi Seifi", email = "mehdiseifi@gmail.com" }
