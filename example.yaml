@@ -1,0 +1,10 @@
+name: experiment_1
+log_dir: "my_log"
+loggers:
+  - csv
+  - tensorboard
+epochs: 5
+batch_size: 8
+lr: 0.001
+optimizer:
+  algo: Adam
