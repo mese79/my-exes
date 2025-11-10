@@ -2,10 +2,10 @@ from typing import Any
 from pathlib import Path
 from datetime import datetime as dt
 
+import torch
+from torch.nn import Module
 from omegaconf import OmegaConf
 from tensorboardX import SummaryWriter
-from torch import Tensor
-from torch.nn import Module
 
 from .csv_logger import CSVLogger
 
@@ -22,7 +22,8 @@ class MyEx:
         if "log_dir" not in self.cfg:
             self.log_dir = self.cfg.name + "_" + timestamp
         else:
-            self.log_dir = self.cfg["log_dir"] + "_" + timestamp  # type: ignore
+            self.log_dir = Path(self.cfg["log_dir"])  # type: ignore
+            self.log_dir = self.log_dir.joinpath(self.cfg.name + "_" + timestamp)
         self.log_dir = Path(self.log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -47,5 +48,9 @@ class MyEx:
         if self.csv_logger is not None:
             self.csv_logger.log(state, category, value, iteration, note)
 
-    def log_model_graph(self, model: Module, sample_input: Tensor) -> None:
+    def log_model_graph(self, model: Module, sample_input: torch.Tensor) -> None:
         self.tb_logger.add_graph(model, input_to_model=sample_input)
+
+    def save_model(self, model: Module, name: str = "model.pth") -> Path:
+        torch.save(model.state_dict(), self.log_dir / name)
+        return self.log_dir / name
