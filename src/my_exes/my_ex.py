@@ -20,11 +20,10 @@ class MyEx:
 
         timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
         if "log_dir" not in self.cfg:
-            self.log_dir = self.cfg.name + "_" + timestamp
+            self.log_dir = Path(self.cfg.name + "_" + timestamp)
         else:
             self.log_dir = Path(self.cfg["log_dir"])  # type: ignore
             self.log_dir = self.log_dir.joinpath(self.cfg.name + "_" + timestamp)
-        self.log_dir = Path(self.log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # save the config file in log dir
@@ -32,7 +31,7 @@ class MyEx:
             OmegaConf.save(self.cfg, self.log_dir / "config.yaml")
 
         self.loggers = self.cfg.get("loggers", ["tensorboard"])  # type: ignore
-        self.tb_logger = SummaryWriter(logdir=str(self.log_dir))
+        self.tb_logger = SummaryWriter(logdir=str(self.log_dir / "tb_log"))
         self.csv_logger = None
         if "csv" in self.loggers:
             self.csv_logger = CSVLogger(self.log_dir / "log.csv")
