@@ -53,3 +53,9 @@ class MyEx:
     def save_model(self, model: Module, name: str = "model.pth") -> Path:
         torch.save(model.state_dict(), self.log_dir / name)
         return self.log_dir / name
+
+    def add_scalars(self, state: str, scalars: dict[str, float], iteration: int) -> None:
+        self.tb_logger.add_scalars(state, scalars, iteration)
+
+    def close(self) -> None:
+        self.tb_logger.close()
