@@ -22,7 +22,7 @@ class MyEx:
         if "log_dir" not in self.cfg:
             self.log_dir = Path(self.cfg.name + "_" + timestamp)
         else:
-            self.log_dir = Path(self.cfg["log_dir"])  # type: ignore
+            self.log_dir = Path(self.cfg["log_dir"]).resolve()  # type: ignore
             self.log_dir = self.log_dir.joinpath(self.cfg.name + "_" + timestamp)
         self.log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -54,7 +54,12 @@ class MyEx:
         torch.save(model.state_dict(), self.log_dir / name)
         return self.log_dir / name
 
-    def add_scalars(self, state: str, scalars: dict[str, float], iteration: int) -> None:
+    def add_scalars(
+        self,
+        state: str,
+        scalars: dict[str, float | int],
+        iteration: int
+    ) -> None:
         self.tb_logger.add_scalars(state, scalars, iteration)
 
     def close(self) -> None:

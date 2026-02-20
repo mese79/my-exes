@@ -23,3 +23,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
+
+[project.urls]
+homepage = "https://github.com/mese79/my-exes"
+repository = "https://github.com/mese79/my-exes"
