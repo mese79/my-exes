@@ -11,20 +11,42 @@ from .csv_logger import CSVLogger
 
 
 class MyEx:
-    def __init__(self, config_file: str | Path) -> None:
+    def __init__(
+        self,
+        config_file: str | Path,
+        exact_log_dir: str | Path | None = None,
+    ) -> None:
+        """Initialize MyEx experiment logger .
+
+        Args:
+            config_file: Path to the YAML configuration file for the experiment.
+            exact_log_dir: Optional path to an existing directory for logging.
+                Useful for test/prediction from the previously created logs.
+                If None, a timestamped directory will be created based on
+                the experiment name.
+
+        Raises:
+            AssertionError: If exact_log_dir is provided
+            but does not exist or is not a directory.
+        """
         self.config_file = Path(config_file).resolve()
         self.cfg = OmegaConf.load(self.config_file)
 
         if "name" not in self.cfg:
             self.cfg["name"] = "experiment"  # type: ignore
 
-        timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
-        if "log_dir" not in self.cfg:
-            self.log_dir = Path(self.cfg.name + "_" + timestamp)
+        if exact_log_dir is not None:
+            self.log_dir = Path(exact_log_dir).resolve()
+            assert self.log_dir.exists() and self.log_dir.is_dir(), \
+                "exact_log_dir should point to an existing directory."
         else:
-            self.log_dir = Path(self.cfg["log_dir"]).resolve()  # type: ignore
-            self.log_dir = self.log_dir.joinpath(self.cfg.name + "_" + timestamp)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
+            timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
+            if "log_dir" not in self.cfg:
+                self.log_dir = Path(self.cfg.name + "_" + timestamp)
+            else:
+                self.log_dir = Path(self.cfg["log_dir"]).resolve()  # type: ignore
+                self.log_dir = self.log_dir.joinpath(self.cfg.name + "_" + timestamp)
+            self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # save the config file in log dir
         if self.config_file.parent != self.log_dir:
