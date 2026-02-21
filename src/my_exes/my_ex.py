@@ -85,7 +85,7 @@ class MyEx:
         self.tb_logger.add_scalars(state, scalars, iteration)
 
     def save_config(self, config_file: Path | str | None = None) -> None:
-        """Saving the config yaml file.
+        """Save current config to a new file or update the config yaml file.
 
         Args:
             config_file (Path | str | None, optional): if provided,
@@ -95,6 +95,8 @@ class MyEx:
         _config_file = config_file or self.config_file
         with open(_config_file, "w") as f:
             OmegaConf.save(self.cfg, f)
+        # also update the copy inside log dir
+        OmegaConf.save(self.cfg, self.log_dir / "config.yaml")
 
     def close(self) -> None:
         self.tb_logger.close()
