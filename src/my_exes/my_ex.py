@@ -76,7 +76,7 @@ class MyEx:
         torch.save(model.state_dict(), self.log_dir / name)
         return self.log_dir / name
 
-    def add_scalars(
+    def log_scalars(
         self,
         state: str,
         scalars: dict[str, float | int],
