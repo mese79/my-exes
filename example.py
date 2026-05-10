@@ -1,5 +1,5 @@
 import os
-os.environ["WANDB_API_KEY"] = "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"
+os.environ["WANDB_API_KEY"] = "your api key"
 
 import numpy as np
 import torch
