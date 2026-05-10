@@ -4,10 +4,12 @@ from datetime import datetime as dt
 
 import torch
 from torch.nn import Module
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 from tensorboardX import SummaryWriter
+from torchvista import trace_model
 
 from .csv_logger import CSVLogger
+from .wandb_logger import WANDBLogger
 
 
 class MyEx:
@@ -29,50 +31,126 @@ class MyEx:
             AssertionError: If exact_log_dir is provided
             but does not exist or is not a directory.
         """
+        # load configurations
         self.config_file = Path(config_file).resolve()
-        self.cfg = OmegaConf.load(self.config_file)
+        self.cfg: DictConfig = OmegaConf.load(self.config_file)  # type: ignore
 
+        # self.log_dir: Path = Path(".")
+        self.loggers: list[str] = []
+        self.csv: CSVLogger | None = None
+        self.tboard: SummaryWriter | None = None
+        self.wandb: WANDBLogger | None = None
+
+        # default experiment name
         if "name" not in self.cfg:
-            self.cfg["name"] = "experiment"  # type: ignore
+            self.cfg["name"] = "experiment"
 
+        # set the log directory
         if exact_log_dir is not None:
+            # validate and use the provided log directory
             self.log_dir = Path(exact_log_dir).resolve()
             assert self.log_dir.exists() and self.log_dir.is_dir(), \
                 "exact_log_dir should point to an existing directory."
         else:
+            # create a new log directory with timestamp
             timestamp = dt.now().strftime("%Y-%m-%d_%H-%M-%S")
             if "log_dir" not in self.cfg:
                 self.log_dir = Path(self.cfg.name + "_" + timestamp)
             else:
-                self.log_dir = Path(self.cfg["log_dir"]).resolve()  # type: ignore
+                self.log_dir = Path(self.cfg["log_dir"]).resolve()
                 self.log_dir = self.log_dir.joinpath(self.cfg.name + "_" + timestamp)
             self.log_dir.mkdir(parents=True, exist_ok=True)
 
-        # save the config file in log dir
+        # save the config file in the log dir
         if self.config_file.parent != self.log_dir:
             OmegaConf.save(self.cfg, self.log_dir / "config.yaml")
 
-        self.loggers = self.cfg.get("loggers", ["tensorboard"])  # type: ignore
-        self.tb_logger = SummaryWriter(logdir=str(self.log_dir / "tb_log"))
-        self.csv_logger = None
-        if "csv" in self.loggers:
-            self.csv_logger = CSVLogger(self.log_dir / "log.csv")
+        self.loggers: list[str] = self.cfg.get("loggers", [])
+        self._init_loggers()
 
-    def log(
-        self, state: str, category: str, value: Any, iteration: int, note: str = ""
-    ) -> None:
-        if isinstance(value, (int, float)):
-            self.tb_logger.add_scalar(
-                f"{category}/{state}", value, iteration, summary_description=note
+    def _init_loggers(self) -> None:
+        """Initialize loggers based on the configuration."""
+        # add csv logger as default if not specified
+        if not self.loggers:
+            self.loggers.append("csv")
+        self.csv = CSVLogger(self.log_dir / "log.csv")
+
+        if "tensorboard" in self.loggers:
+            self.tboard = SummaryWriter(log_dir=str(self.log_dir / "tensorboard"))
+            self.tboard.add_text("config", OmegaConf.to_yaml(self.cfg), 0)
+
+        if "wandb" in self.loggers:
+            self.wandb = WANDBLogger(
+                log_dir=self.log_dir,
+                project=self.cfg.get("wandb_project", self.cfg.name),
+                config=OmegaConf.to_container(self.cfg, resolve=True)  # type: ignore
             )
 
-        if self.csv_logger is not None:
-            self.csv_logger.log(state, category, value, iteration, note)
+    def log(
+        self,
+        state: str,
+        category: str,
+        value: Any,
+        iteration: int,
+        note: str = ""
+    ) -> None:
+        """Log into experiment loggers.
+
+        Args:
+            state (str): state of the experiment, e.g., "train", "validation", "test".
+            category (str): category of the metric, e.g., "loss", "accuracy".
+            value (Any): value of the metric to log.
+            iteration (int): iteration number for the log entry.
+            note (str, optional): additional notes for the csv log entry. Defaults to "".
+        """
+        if self.tboard:
+            if isinstance(value, (int, float)):
+                self.tboard.add_scalar(
+                    f"{category}/{state}",
+                    value,
+                    global_step=iteration,
+                    summary_description=note
+                )
+            else:
+                self.tboard.add_text(
+                    f"{category}/{state}",
+                    str(value),
+                    global_step=iteration
+                )
+
+        if self.wandb:
+            self.wandb.add_scalar(
+                f"{category}/{state}",
+                value,
+            )
+
+        if self.csv:
+            self.csv.log(state, category, value, iteration, note)
 
     def log_model_graph(self, model: Module, sample_input: torch.Tensor) -> None:
-        self.tb_logger.add_graph(model, input_to_model=sample_input)
+        trace_model(
+            model,
+            inputs=sample_input,
+            collapse_modules_after_depth=0,
+            export_path=self.log_dir / "model.html",
+            export_format="html"
+        )
+        if self.tboard:
+            self.tboard.add_graph(model, input_to_model=sample_input)
+        if self.wandb:
+            self.wandb.log_html(self.log_dir / "model.html")
 
     def save_model(self, model: Module, name: str = "model.pth") -> Path:
+        """Save the model checkpoint.
+
+        Args:
+            model (Module): PyTorch Module to be saved.
+            name (str, optional): Name of the file to save the model to.
+            Defaults to "model.pth".
+
+        Returns:
+            Path: Path to the saved model file.
+        """
         torch.save(model.state_dict(), self.log_dir / name)
         return self.log_dir / name
 
@@ -82,7 +160,17 @@ class MyEx:
         scalars: dict[str, float | int],
         iteration: int
     ) -> None:
-        self.tb_logger.add_scalars(state, scalars, iteration)
+        """Log multiple scalar values to experiment loggers.
+
+        Args:
+            state (str): state of the experiment, e.g., "train", "validation", "test".
+            scalars (dict[str, float | int]): dictionary of scalar values to log.
+            iteration (int): iteration number for the log entry.
+        """
+        if self.tboard:
+            self.tboard.add_scalars(state, scalars, iteration)
+        if self.wandb:
+            self.wandb.add_scalars(state, scalars)
 
     def save_config(self, config_file: Path | str | None = None) -> None:
         """Save current config to a new file or update the config yaml file.
@@ -99,4 +187,7 @@ class MyEx:
         OmegaConf.save(self.cfg, self.log_dir / "config.yaml")
 
     def close(self) -> None:
-        self.tb_logger.close()
+        if self.tboard:
+            self.tboard.close()
+        if self.wandb:
+            self.wandb.run.finish()

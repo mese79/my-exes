@@ -3,6 +3,7 @@ log_dir: my_logs
 loggers:
   - csv
   - tensorboard
+  - wandb
 epochs: 5
 batch_size: 8
 lr: 0.001

@@ -1,3 +1,7 @@
+import os
+os.environ["WANDB_API_KEY"] = "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"
+
+import numpy as np
 import torch
 
 from my_exes import MyEx
@@ -28,15 +32,16 @@ def main():
     net = Net()
     my_ex.log_model_graph(net, sample_input=torch.randn(1, 1, 16, 16))
 
-    # if my_ex.cfg.optimizer.algo == "Adam":
     epochs = my_ex.cfg.epochs
     batch_size = my_ex.cfg.batch_size
+    # if my_ex.cfg.optimizer.algo == "Adam":
     optimizer = torch.optim.Adam(net.parameters(), lr=my_ex.cfg.lr)
 
     data = torch.randn(batch_size * 2, 1, 16, 16)
     num_batches = data.shape[0] // batch_size
 
     for e in range(epochs):
+        losses = []
         for b in range(num_batches):
             batch_input = data[b * batch_size:(b + 1) * batch_size]
             out = net(batch_input)
@@ -44,8 +49,20 @@ def main():
             loss.backward()
             optimizer.step()
 
-            my_ex.log("train", "loss", loss.item(), e * num_batches + b)
-            print(f"Epoch {e}: Loss={loss.item()}")
+            my_ex.log("train", "step_loss", loss.item(), e * num_batches + b)
+            losses.append(loss.item())
+
+        epoch_loss = np.array(losses).mean()
+        my_ex.log("train", "epoch_loss", epoch_loss, e)
+        print(f"Epoch {e}: Loss={epoch_loss}")
+
+    my_ex.save_model(net)
+    my_ex.log_scalars(
+        state="final",
+        scalars={"metric1": 0.95, "metric2": 0.85},
+        iteration=epochs
+    )
+    my_ex.close()
 
 
 if __name__ == "__main__":
